@@ -1,0 +1,319 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.ServiceModel;
+using System.ServiceModel.Web;
+using System.Text;
+
+using System.Data;
+using System.Data.SqlClient;
+
+public class Service : IService
+{
+    SqlConnection conn;
+    SqlCommand cmd;
+    SqlDataReader rd;
+    String strConn = "Data Source=DESKTOP-GDFSEJO;Initial Catalog=internal_db;User ID=sa;Password=sa123";
+
+    public List<Customer> getCustomers()
+    {
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        cmd = new SqlCommand("SELECT * FROM TBL_CUSTOMER", conn);
+        rd = cmd.ExecuteReader();
+
+        List<Customer> customers = new List<Customer>();
+        while (rd.Read())
+        {
+            Customer c = new Customer();
+            c.cid = Convert.ToInt32(rd[0].ToString());
+            c.name = rd[1].ToString();
+            customers.Add(c);
+        }
+        return customers;
+    }
+
+    public List<Product> getProducts()
+    {
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        cmd = new SqlCommand("SELECT * FROM TBL_PRODUCT", conn);
+        rd = cmd.ExecuteReader();
+
+        List<Product> products = new List<Product>();
+        while (rd.Read())
+        {
+            Product p = new Product();
+            p.pid = Convert.ToInt32(rd[0].ToString());
+            p.prod_name = rd[1].ToString();
+            products.Add(p);
+        }
+        return products;
+    }
+
+    public void doOrder(int cid, int pid)
+    {
+        Boolean isExist = isAlredyExist(cid, pid);
+        int oid = -1;
+        int price = -1;
+        if (!isExist)
+        {
+            entryOnOrderTable(cid);
+            oid = getOrderId();
+            price = getProductRate(pid);
+            entryOnOrderDetailTable(oid, pid, price, cid, false);
+            entryForTotalPrice(oid);
+        }
+        else
+        {
+            oid = getOrderId();
+            price = getProductRate(pid);
+            entryOnOrderDetailTable(oid, pid, price, cid, true);
+            entryForTotalPrice(oid);
+        }
+    }
+
+    private void entryOnOrderTable(int cid)
+    {
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        String qry = "INSERT INTO TBL_ORDER(ODATE, CID) VALUES('" + DateTime.Now + "', " + cid + ")";
+        cmd = new SqlCommand(qry, conn);
+        cmd.ExecuteNonQuery();
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+    }
+
+    private int getOrderId()
+    {
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        cmd = new SqlCommand("SELECT * FROM TBL_ORDER ORDER BY OID DESC", conn);
+        rd = cmd.ExecuteReader();
+        rd.Read();
+        int oid = Convert.ToInt32(rd[0].ToString());
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+
+        return oid;
+    }
+
+    private int getProductRate(int pid)
+    {
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        cmd = new SqlCommand("SELECT PRICE FROM TBL_PRODUCT WHERE PID=" + pid, conn);
+        rd = cmd.ExecuteReader();
+        rd.Read();
+        int price = Convert.ToInt32(rd[0].ToString());
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+
+        return price;
+    }
+
+    private void entryOnOrderDetailTable(int oid, int pid, int price, int cid, Boolean isExist)
+    {
+        String qry;
+        if (!isExist)
+        {
+            qry = "INSERT INTO TBL_ORDER_DETAILS(OID, PID, QTY, RATE) VALUES(" + oid + ", " + pid + ", 1, " + price + ")";
+        }
+        else
+        {
+            int qty = getQty(cid, pid) + 1;
+            qry = "UPDATE TBL_ORDER_DETAILS SET QTY=" + qty +
+                  " FROM TBL_CUSTOMER C, TBL_PRODUCT P, TBL_ORDER O, TBL_ORDER_DETAILS OD " +
+                  " WHERE C.CID=" + cid + " AND P.PID=" + pid +
+                  " AND C.CID=O.CID AND P.PID=OD.PID AND O.OID=OD.OID";
+        }
+
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        cmd = new SqlCommand(qry, conn);
+        cmd.ExecuteNonQuery();
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+    }
+
+    private Boolean isAlredyExist(int cid, int pid)
+    {
+        bool isExist = false;
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        String qry = "SELECT COUNT(*) " +
+                     "FROM TBL_CUSTOMER C, TBL_PRODUCT P, TBL_ORDER O, TBL_ORDER_DETAILS OD " +
+                     "WHERE C.CID=" + cid + " AND P.PID=" + pid + " AND C.CID=O.CID AND P.PID=OD.PID AND O.OID=OD.OID";
+        cmd = new SqlCommand(qry, conn);
+        rd = cmd.ExecuteReader();
+        rd.Read();
+        if (Convert.ToInt32(rd[0].ToString()) != 0)
+        {
+            isExist = true;
+        }
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+        return isExist;
+    }
+
+    private int getQty(int cid, int pid)
+    {
+        conn = new SqlConnection(strConn);
+        conn.Open();
+
+        String qry = "SELECT QTY " +
+                     "FROM TBL_CUSTOMER C, TBL_PRODUCT P, TBL_ORDER O, TBL_ORDER_DETAILS OD " +
+                     "WHERE C.CID=" + cid + " AND P.PID=" + pid + " AND C.CID=O.CID AND P.PID=OD.PID AND O.OID=OD.OID";
+
+        cmd = new SqlCommand(qry, conn);
+        rd = cmd.ExecuteReader();
+        rd.Read();
+        int qty = Convert.ToInt32(rd[0].ToString());
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+        return qty;
+    }
+
+    private int getTotalPrice(int oid)
+    {
+        conn = new SqlConnection(strConn);
+        conn.Open();
+
+        String qry = "SELECT OD.QTY, OD.RATE " +
+                     "FROM TBL_ORDER_DETAILS OD, TBL_ORDER O " +
+                     "WHERE O.OID=" + oid + " AND O.OID=OD.OID";
+
+        cmd = new SqlCommand(qry, conn);
+        rd = cmd.ExecuteReader();
+        rd.Read();
+        int qty = Convert.ToInt32(rd[0].ToString());
+        int price = Convert.ToInt32(rd[1].ToString());
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+
+        return (price * qty);
+    }
+
+    private void entryForTotalPrice(int oid)
+    {
+        int total = getTotalPrice(oid);
+
+        String qry = "UPDATE O SET TOTAL_AMOUNT=" + total +
+                  " FROM TBL_ORDER O, TBL_ORDER_DETAILS OD " +
+                  " WHERE O.OID=OD.OID AND O.OID=" + oid;
+
+        conn = new SqlConnection(strConn);
+        conn.Open();
+        cmd = new SqlCommand(qry, conn);
+        cmd.ExecuteNonQuery();
+        conn.Close();
+        cmd.Dispose();
+        conn.Dispose();
+    }
+
+    public List<OrderBill> getOrderBill(int cid)
+    {
+        conn = new SqlConnection(strConn);
+        String qry = "SELECT O.OID, O.ODATE, SUM(OD.QTY) AS TOTAL_ITEMS, O.TOTAL_AMOUNT " +
+                    "FROM TBL_CUSTOMER C, TBL_ORDER O, TBL_ORDER_DETAILS OD " +
+                    "WHERE C.CID=O.CID AND O.OID=OD.OID AND C.CID=" + cid + " " +
+                    "GROUP BY OD.OID, O.OID, O.ODATE, O.TOTAL_AMOUNT";
+        conn.Open();
+        cmd = new SqlCommand(qry, conn);
+        rd = cmd.ExecuteReader();
+
+        List<OrderBill> orderBills = new List<OrderBill>();
+        while (rd.Read())
+        {
+            OrderBill o = new OrderBill();
+            o.oid = Convert.ToInt32(rd[0].ToString());
+            o.odate = rd[1].ToString();
+            o.total_items = Convert.ToInt32(rd[2].ToString());
+            o.total_amount = Convert.ToInt32(rd[3].ToString());
+            orderBills.Add(o);
+        }
+        return orderBills;
+    }
+
+    public List<OrderSlipHeading> getOrderSlipHeading(int oid)
+    {
+        conn = new SqlConnection(strConn);
+        String qry = "SELECT C.NAME, O.OID, O.ODATE " +
+                    "FROM TBL_CUSTOMER C, TBL_ORDER O " +
+                    "WHERE C.CID=O.CID AND O.OID=" + oid;
+        conn.Open();
+        cmd = new SqlCommand(qry, conn);
+        rd = cmd.ExecuteReader();
+
+        List<OrderSlipHeading> orderSlipHeading = new List<OrderSlipHeading>();
+        while (rd.Read())
+        {
+            OrderSlipHeading o = new OrderSlipHeading();
+            o.cust_name = rd[0].ToString();
+            o.oid = Convert.ToInt32(rd[1].ToString());
+            o.odate = rd[2].ToString();
+            orderSlipHeading.Add(o);
+        }
+        return orderSlipHeading;
+    }
+
+    public List<OrderSlipDetail> getOrderSlipDetail(int oid)
+    {
+        conn = new SqlConnection(strConn);
+        String qry = "SELECT P.PID, P.PROD_NAME, P.PACKING, SUM(OD.QTY) AS TOTAL_QTY, P.PRICE, (P.PRICE * SUM(OD.QTY)) AS TOTAL " +
+                    "FROM TBL_PRODUCT P, TBL_ORDER O, TBL_ORDER_DETAILS OD " +
+                    "WHERE P.PID=OD.PID AND O.OID=OD.OID AND O.OID=" + oid + " " +
+                    "GROUP BY OD.OID, P.PID, P.PROD_NAME, P.PACKING, P.PRICE";
+        conn.Open();
+        cmd = new SqlCommand(qry, conn);
+        rd = cmd.ExecuteReader();
+
+        List<OrderSlipDetail> orderSlipDetail = new List<OrderSlipDetail>();
+        while (rd.Read())
+        {
+            OrderSlipDetail o = new OrderSlipDetail();
+            o.pid = Convert.ToInt32(rd[0].ToString());
+            o.prod_name = rd[1].ToString();
+            o.packing = Convert.ToInt32(rd[2].ToString());
+            o.qty = Convert.ToInt32(rd[3].ToString());
+            o.price = Convert.ToInt32(rd[4].ToString());
+            o.total_amount = Convert.ToInt32(rd[5].ToString());
+            orderSlipDetail.Add(o);
+        }
+        return orderSlipDetail;
+    }
+
+    public List<OrderSlipDetail> getAllOrderDetail()
+    {
+        conn = new SqlConnection(strConn);
+        String qry = "SELECT P.PID, P.PROD_NAME, P.PACKING, SUM(OD.QTY) AS TOTAL_QTY, P.PRICE, (P.PRICE * SUM(OD.QTY)) AS TOTAL " +
+                    "FROM TBL_PRODUCT P, TBL_ORDER O, TBL_ORDER_DETAILS OD " +
+                    "WHERE P.PID=OD.PID AND O.OID=OD.OID " +
+                    "GROUP BY OD.OID, P.PID, P.PROD_NAME, P.PACKING, P.PRICE";
+        conn.Open();
+        cmd = new SqlCommand(qry, conn);
+        rd = cmd.ExecuteReader();
+
+        List<OrderSlipDetail> orderSlipDetail = new List<OrderSlipDetail>();
+        while (rd.Read())
+        {
+            OrderSlipDetail o = new OrderSlipDetail();
+            o.pid = Convert.ToInt32(rd[0].ToString());
+            o.prod_name = rd[1].ToString();
+            o.packing = Convert.ToInt32(rd[2].ToString());
+            o.qty = Convert.ToInt32(rd[3].ToString());
+            o.price = Convert.ToInt32(rd[4].ToString());
+            o.total_amount = Convert.ToInt32(rd[5].ToString());
+            orderSlipDetail.Add(o);
+        }
+        return orderSlipDetail;
+    }
+}
