@@ -1,0 +1,123 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.ServiceModel;
+using System.ServiceModel.Web;
+using System.Text;
+
+// NOTE: You can use the "Rename" command on the "Refactor" menu to change the interface name "IService" in both code and config file together.
+[ServiceContract]
+public interface IService
+{
+
+    [OperationContract]
+    List<Customer> getCustomers();
+
+    [OperationContract]
+    List<Product> getProducts();
+
+    [OperationContract]
+    void doOrder(int cid, int pid);
+
+    [OperationContract]
+    List<OrderBill> getOrderBill(int cid);
+
+    [OperationContract]
+    List<OrderSlipHeading> getOrderSlipHeading(int oid);
+
+    [OperationContract]
+    List<OrderSlipDetail> getOrderSlipDetail(int oid);
+
+    [OperationContract]
+    List<OrderSlipDetail> getAllOrderDetail();
+}
+
+
+
+[DataContract]
+public class Customer
+{
+    [DataMember]
+    public int cid { get; set; }
+
+    [DataMember]
+    public String name { get; set; }
+}
+
+
+[DataContract]
+public class Product
+{
+    [DataMember]
+    public int pid { get; set; }
+
+    [DataMember]
+    public String prod_name { get; set; }
+}
+
+[DataContract]
+public class Order
+{
+    [DataMember]
+    public int oid { get; set; }
+
+    [DataMember]
+    public String odate { get; set; }
+
+    [DataMember]
+    public int cid { get; set; }
+}
+
+
+[DataContract]
+public class OrderBill
+{
+    [DataMember]
+    public int oid { get; set; }
+
+    [DataMember]
+    public String odate { get; set; }
+
+    [DataMember]
+    public int total_items { get; set; }
+
+    [DataMember]
+    public int total_amount { get; set; }
+}
+
+
+[DataContract]
+public class OrderSlipHeading
+{
+    [DataMember]
+    public String cust_name { get; set; }
+
+    [DataMember]
+    public int oid { get; set; }
+
+    [DataMember]
+    public String odate { get; set; }
+}
+
+[DataContract]
+public class OrderSlipDetail
+{
+    [DataMember]
+    public int pid { get; set; }
+
+    [DataMember]
+    public String prod_name { get; set; }
+
+    [DataMember]
+    public int packing { get; set; }
+
+    [DataMember]
+    public int qty { get; set; }
+
+    [DataMember]
+    public int price { get; set; }
+
+    [DataMember]
+    public int total_amount { get; set; }
+}
