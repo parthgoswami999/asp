@@ -1,0 +1,84 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.Serialization;
+using System.ServiceModel;
+using System.ServiceModel.Web;
+using System.Text;
+using System.Data;
+using System.Data.SqlClient;
+
+// NOTE: You can use the "Rename" command on the "Refactor" menu to change the class name "Service" in code, svc and config file together.
+public class Service : IService
+{
+    SqlConnection con = new SqlConnection("Data Source=.\\sqlexpress;Initial Catalog=admission;Integrated Security=True");
+
+    public string delete(int id)
+    {
+        con.Open();
+        string result = "deleted";
+        SqlCommand cmd = new SqlCommand("delete from student where id=" + id, con);
+        cmd.ExecuteNonQuery();
+        con.Close();
+        return result;
+    }
+
+    public List<admission> getdata()
+    {
+        List<admission> admission = new List<admission>();
+        con.Open();
+        SqlCommand cmd = new SqlCommand("select * from student", con);
+        SqlDataReader r = cmd.ExecuteReader();
+        while(r.Read())
+        {
+            admission a = new admission();
+            a.id = r[0].ToString();
+            a.name = r[1].ToString();
+            a.classname = r[2].ToString();
+            a.phone = r[3].ToString();
+            a.dob = r[4].ToString();
+            admission.Add(a);
+        }
+        con.Close();
+        return admission;
+    }
+
+    public string GetData(int value)
+	{
+		return string.Format("You entered: {0}", value);
+	}
+
+	public CompositeType GetDataUsingDataContract(CompositeType composite)
+	{
+		if (composite == null)
+		{
+			throw new ArgumentNullException("composite");
+		}
+		if (composite.BoolValue)
+		{
+			composite.StringValue += "Suffix";
+		}
+		return composite;
+	}
+
+    public string insert(int id,string name, string classname, string phone, string dob)
+    {
+        con.Open();
+        string result = "inserted";
+        long ph = Convert.ToInt64(phone);
+        SqlCommand cmd = new SqlCommand("insert into student (id,name,class,phone,dob) values('" + id + "','" + name + "','" + classname + "'," + phone + ",'" + dob + "')", con);
+        cmd.ExecuteNonQuery();
+        con.Close();
+        return result;
+    }
+
+    public string update(int id, string name, string classname, string phone, string dob)
+    {
+        con.Open();
+        string result = "updated";
+        SqlCommand cmd = new SqlCommand("update student set name='" + name + "',class='" + classname + "',phone='" + phone + "',dob='" + dob +"' where id="+id , con);
+        cmd.ExecuteNonQuery();
+        con.Close();
+        return result;
+    }
+}
